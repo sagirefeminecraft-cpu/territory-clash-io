@@ -1,91 +1,277 @@
-<!doctype html>
+
+<!DOCTYPE html>
 <html lang="tr">
 <head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Territory Clash.io</title>
+<script src="/socket.io/socket.io.js"></script>
 <style>
-:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0b1220;color:#e8eefc;font:15px system-ui,Arial}
-header{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px 16px;background:#111c30;border-bottom:1px solid #263652;flex-wrap:wrap}
-h1{font-size:20px;margin:0}small{color:#a8b8d4}.layout{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:12px;padding:12px;max-width:1400px;margin:auto}
-canvas{width:100%;height:auto;display:block;background:#101b2c;border:1px solid #2b3c59;border-radius:12px;touch-action:manipulation}
-.panel{background:#111c30;border:1px solid #263652;border-radius:12px;padding:14px;margin-bottom:12px}
-label{display:block;color:#b9c7df;margin:10px 0 5px}input,button{font:inherit;border-radius:8px;border:1px solid #334866;padding:10px;background:#0b1527;color:#eef4ff;width:100%}button{background:#3b82f6;border:0;font-weight:700;cursor:pointer;margin-top:8px}button.secondary{background:#253650}button:disabled{opacity:.5;cursor:not-allowed}.status{padding:8px 10px;border-radius:8px;background:#0b1527;color:#bcd0ef;line-height:1.5}.players{display:grid;gap:7px;margin-top:8px}.player{display:flex;justify-content:space-between;gap:8px}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}.hint{line-height:1.5;color:#b7c5dc;font-size:13px}.mobile-controls{display:none;grid-template-columns:1fr 1fr;gap:8px}
-@media(max-width:850px){.layout{grid-template-columns:1fr}.side{display:grid;grid-template-columns:1fr 1fr;gap:10px}.side .panel{margin:0}.mobile-controls{display:grid}}
+*{box-sizing:border-box}
+body{margin:0;background:#07111f;color:#eef6ff;font-family:Arial,sans-serif}
+button,input{font:inherit}
+button{cursor:pointer;border:0;border-radius:10px;padding:13px 20px;font-weight:bold}
+button:disabled{opacity:.5;cursor:not-allowed}
+.screen{display:none;min-height:100vh;padding:24px}
+.screen.active{display:flex}
+#home{align-items:center;justify-content:center;text-align:center;background:radial-gradient(ellipse at 50% 35%,#174c70 0,#0b2036 42%,#07111f 78%)}
+.logo{font-size:clamp(36px,7vw,68px);font-weight:900;letter-spacing:-2px}
+.logo span{color:#52e0ba}
+.subtitle{color:#9bb2c9;margin:16px 0 32px}
+.primary{background:#4ce0b5;color:#071b25;font-size:19px;padding:17px 42px;box-shadow:0 8px 35px #39d7ad30}
+.primary:hover{background:#78f4d1}
+.small-note{color:#7e9ab4;font-size:12px;margin-top:20px}
+#lobby{flex-direction:column;gap:16px;max-width:1200px;margin:auto}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.brand{font-size:25px;font-weight:900}
+.brand span{color:#4ce0b5}
+.ghost{background:#1b2b40;color:#dce9f7}
+.layout{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(260px,1fr);gap:16px}
+.panel{background:#101f31;border:1px solid #22384f;border-radius:16px;padding:18px;min-width:0}
+h2{font-size:19px;margin:0 0 14px}
+.muted{color:#91a8bf;font-size:13px}
+.map{width:100%;height:300px;border-radius:12px;overflow:hidden;background:#091a2b}
+.map svg{width:100%;height:100%;display:block}
+.progress{height:12px;background:#26394c;border-radius:20px;overflow:hidden;margin:13px 0}
+#bar{height:100%;width:0%;background:linear-gradient(90deg,#29b99b,#91f4d3);transition:width .25s}
+.progressline{display:flex;justify-content:space-between;gap:10px;font-weight:bold}
+#percent{color:#4ce0b5}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+#ready{flex:1;background:#4ce0b5;color:#08251f}
+#ready.on{background:#e8b75d;color:#201707}
+.player{display:flex;align-items:center;gap:10px;padding:11px 0;border-bottom:1px solid #24364a}
+.dot{width:11px;height:11px;border-radius:50%;background:#647b91;flex-shrink:0}
+.dot.ready{background:#4ce0b5;box-shadow:0 0 10px #4ce0b580}
+.playername{flex:1;overflow-wrap:anywhere}
+.status{font-size:12px;color:#92a8bd}
+.chatbox{height:190px;overflow-y:auto;background:#0a1726;border-radius:10px;padding:10px;margin-bottom:10px;font-size:13px}
+.chatrow{display:flex;gap:7px}
+.chatrow input{min-width:0;flex:1;background:#0a1726;color:white;border:1px solid #2b4056;border-radius:9px;padding:11px}
+.chatrow button{background:#253b50;color:white;padding:10px 13px}
+#game{flex-direction:column;gap:16px}
+#gameMap{flex:1;min-height:350px}
+#gameMap svg{width:100%;height:100%;min-height:350px}
+#gameStatus{color:#4ce0b5}
+@media(max-width:720px){
+ .screen{padding:14px}
+ .layout{grid-template-columns:1fr}
+ .map{height:240px}
+ .panel{padding:14px}
+}
 </style>
 </head>
 <body>
-<header><div><h1>🌍 Territory Clash.io</h1><small>Gerçek zamanlı bölge savaşı</small></div><div id="connection" class="status">Sunucuya bağlanılıyor…</div></header>
-<main class="layout">
-<section>
-<canvas id="map" width="900" height="600" aria-label="Oyun haritası"></canvas>
-<div class="mobile-controls"><button id="expandBtn">Büyüme hamlesi</button><button class="secondary" id="defendBtn">Savunmayı güçlendir</button></div>
-<p class="hint">Haritada kendi rengindeki veya nötr bölgelere tıkla. Komşu bölgeler üzerinden yayıl. İlk sürüm prototiptir.</p>
+
+<section id="home" class="screen active">
+  <div>
+    <div class="logo">TERRITORY <span>CLASH</span></div>
+    <div class="subtitle">Haritanı kur. Bölgeleri ele geçir. Zirveye çık.</div>
+    <button class="primary" id="play">OYNA →</button>
+    <div class="small-note">ÇOK OYUNCULU STRATEJİ OYUNU</div>
+    <p class="muted" id="connection">Sunucu bağlantısı kontrol ediliyor...</p>
+  </div>
 </section>
-<aside class="side">
-<div class="panel"><h3>Oyuncu bilgileri</h3><div id="me" class="status">Bir takma ad yazıp odaya katıl.</div>
-<label for="name">Takma ad</label><input id="name" maxlength="18" value="Oyuncu">
-<label for="room">Oda kodu</label><input id="room" maxlength="12" value="ARENA1">
-<button id="join">Odaya katıl</button><button id="leave" class="secondary" disabled>Odadan ayrıl</button></div>
-<div class="panel"><h3>Skor tablosu</h3><div id="players" class="players">Henüz oyuncu yok.</div></div>
-<div class="panel"><h3>Nasıl oynanır?</h3><p class="hint">• Oda kodunu arkadaşına ver.<br>• İkiniz de aynı kodla katılın.<br>• Bölgeler sunucu tarafından güncellenir.<br>• En çok bölgeyi ele geçiren kazanır.</p><div id="message" class="status">Hazır.</div></div>
-</aside></main>
-<script src="/socket.io/socket.io.js"></script>
+
+<section id="lobby" class="screen">
+  <div class="topbar">
+    <div class="brand">TERRITORY <span>CLASH</span></div>
+    <button class="ghost" id="back">← Ana menü</button>
+  </div>
+
+  <div class="layout">
+    <div class="panel">
+      <h2>🌍 Savaş alanı</h2>
+      <div class="map" id="lobbyMap"></div>
+      <div class="progressline">
+        <span>Oyuncu hazırlığı</span>
+        <span id="percent">%0</span>
+      </div>
+      <div class="progress"><div id="bar"></div></div>
+      <div class="muted" id="readyCount">Oyuncular bekleniyor...</div>
+      <div class="actions">
+        <button id="ready">✓ HAZIRIM</button>
+      </div>
+      <p class="muted">Herkes hazır olduğunda maç başlayacak.</p>
+      <p class="muted" id="lobbyStatus">Sunucuya bağlanılıyor...</p>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:16px">
+      <div class="panel">
+        <h2>👥 Oyuncular</h2>
+        <div id="players">
+          <p class="muted">Oyuncu listesi sunucudan bekleniyor.</p>
+        </div>
+      </div>
+      <div class="panel" id="chatPanel">
+        <div class="topbar">
+          <h2>💬 Lobi sohbeti</h2>
+          <button class="ghost" id="toggleChat">Sohbeti kapat</button>
+        </div>
+        <div id="chatContent">
+          <div class="chatbox" id="messages"></div>
+          <form class="chatrow" id="chatForm">
+            <input id="chatInput" maxlength="200" placeholder="Mesajını yaz..." autocomplete="off">
+            <button type="submit">Gönder</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="game" class="screen">
+  <div class="topbar">
+    <div class="brand">TERRITORY <span>CLASH</span></div>
+    <span id="gameStatus">Maç başladı!</span>
+  </div>
+  <div class="panel">
+    <h2>🗺️ Savaş haritası</h2>
+    <div class="map" id="gameMap"></div>
+    <p class="muted">Bu harita ilk sürümde görsel prototiptir. Bölge ele geçirme mekanikleri sonraki aşamada eklenecek.</p>
+    <button class="ghost" id="leaveGame">Lobiye dön</button>
+  </div>
+</section>
+
 <script>
-(() => {
-const canvas=document.getElementById('map'),ctx=canvas.getContext('2d');
-const conn=document.getElementById('connection'),meBox=document.getElementById('me'),playersBox=document.getElementById('players'),msg=document.getElementById('message');
-const nameInput=document.getElementById('name'),roomInput=document.getElementById('room'),joinBtn=document.getElementById('join'),leaveBtn=document.getElementById('leave');
-let socket=null, state=null, myId=null, currentRoom=null, selected=null;
-const COLS=18,ROWS=12,CW=canvas.width/COLS,CH=canvas.height/ROWS;
-function draw(){
- ctx.clearRect(0,0,canvas.width,canvas.height);
- if(!state){ctx.fillStyle='#b9c8df';ctx.font='24px system-ui';ctx.textAlign='center';ctx.fillText('Odaya katılınca harita açılacak',canvas.width/2,canvas.height/2);return}
- for(let i=0;i<state.cells.length;i++){
-  const cell=state.cells[i],x=(i%COLS)*CW,y=Math.floor(i/COLS)*CH;
-  ctx.fillStyle=cell.owner? (state.players.find(p=>p.id===cell.owner)?.color||'#667085') : '#26364b';
-  ctx.fillRect(x+1,y+1,CW-2,CH-2);
-  if(cell.owner){ctx.fillStyle='rgba(255,255,255,.8)';ctx.font='12px system-ui';ctx.textAlign='center';ctx.fillText(String(cell.army||1),x+CW/2,y+CH/2+4)}
-  if(selected===i){ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.strokeRect(x+3,y+3,CW-6,CH-6)}
- }
+const $ = id => document.getElementById(id);
+let socket = null;
+let isReady = false;
+let chatOpen = true;
+let inLobby = false;
+let lastPlayers = [];
+
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  $(id).classList.add('active');
 }
-function render(){
- draw();
- if(!state)return;
- const p=state.players.find(x=>x.id===myId);
- meBox.textContent=p?`${p.name} · ${p.cells} bölge · ${p.army} asker`:'Odaya katıl.';
- playersBox.innerHTML='';
- [...state.players].sort((a,b)=>b.cells-a.cells).forEach((p,i)=>{
-  const row=document.createElement('div');row.className='player';
-  const left=document.createElement('span');left.textContent=`${i+1}. ${p.name}`;
-  const dot=document.createElement('span');dot.className='dot';dot.style.background=p.color;left.prepend(dot);
-  const score=document.createElement('b');score.textContent=p.cells;
-  row.append(left,score);playersBox.append(row);
- });
+
+function makeMap(target){
+  const colors=['#37c9a2','#4d9ff0','#f1b84b','#b18af5','#ed7186','#58c7df'];
+  let shapes='';
+  for(let i=0;i<36;i++){
+    const col=i%6,row=Math.floor(i/6);
+    const x=12+col*64+(row%2)*7;
+    const y=12+row*42;
+    const points=[
+      `${x+3},${y+3}`,`${x+48},${y}`,
+      `${x+59},${y+18}`,`${x+45},${y+35}`,
+      `${x+8},${y+38}`,`${x},${y+19}`
+    ].join(' ');
+    shapes+=`<polygon points="${points}" fill="${colors[(col+row*2)%colors.length]}" stroke="#102438" stroke-width="2" opacity=".94"/>`;
+  }
+  $(target).innerHTML=`<svg viewBox="0 0 410 275" preserveAspectRatio="xMidYMid meet">
+    <rect width="410" height="275" fill="#0a2032"/>
+    <path d="M0 90 Q100 35 200 105 T410 70 M0 215 Q100 165 210 225 T410 185" fill="none" stroke="#183d50" stroke-width="2"/>
+    ${shapes}
+  </svg>`;
 }
+makeMap('lobbyMap');
+makeMap('gameMap');
+
 function connect(){
- if(typeof io==='undefined'){conn.textContent='Sunucu henüz kurulmadı';msg.textContent='Bu proje dosyalarını bir Node.js sunucusuna dağıtınca çevrim içi bağlantı çalışır.';draw();return}
- socket=io();
- socket.on('connect',()=>{conn.textContent='🟢 Sunucuya bağlı';});
- socket.on('disconnect',()=>{conn.textContent='🔴 Bağlantı kesildi';});
- socket.on('state',s=>{state=s;render()});
- socket.on('joined',d=>{myId=d.id;currentRoom=d.room;joinBtn.disabled=true;leaveBtn.disabled=false;msg.textContent=`${d.room} odasına katıldın!`});
- socket.on('notice',t=>msg.textContent=t);
- socket.on('connect_error',()=>{conn.textContent='Sunucuya bağlanılamadı';});
+  if(typeof window.io!=='function'){
+    $('connection').textContent='Socket.IO bağlantısı hazır değil.';
+    $('lobbyStatus').textContent='Sunucu ayarı gerekiyor.';
+    return;
+  }
+  socket=io();
+  socket.on('connect',()=>{
+    $('connection').textContent='Sunucuya bağlandı ✓';
+    $('lobbyStatus').textContent='Bağlandı. Lobiye katılabilirsin.';
+    if(inLobby) socket.emit('joinLobby');
+  });
+  socket.on('disconnect',()=>{
+    $('connection').textContent='Bağlantı kesildi. Yeniden bağlanılıyor...';
+    $('lobbyStatus').textContent='Sunucu bağlantısı kesildi.';
+  });
+  socket.on('lobbyUpdate',data=>{
+    lastPlayers=data.players||[];
+    isReady=!!lastPlayers.find(p=>p.id===socket.id)?.ready;
+    renderPlayers(lastPlayers);
+  });
+  socket.on('chatMessage',data=>addMessage(data.name,data.message));
+  socket.on('gameStart',data=>{
+    show('game');
+    $('gameStatus').textContent='Maç başladı!';
+    if(data && data.message) $('gameStatus').textContent=data.message;
+  });
+  socket.on('lobbyError',msg=>{
+    $('lobbyStatus').textContent=String(msg);
+  });
 }
-joinBtn.addEventListener('click',()=>{
- if(!socket){connect();setTimeout(()=>{if(socket?.connected)joinRoom()},250);return}
- if(socket.connected)joinRoom();else socket.once('connect',joinRoom);
-});
-function joinRoom(){socket.emit('join',{name:nameInput.value.trim()||'Oyuncu',room:roomInput.value.trim().toUpperCase()||'ARENA1'});}
-leaveBtn.addEventListener('click',()=>{socket?.emit('leave');myId=null;currentRoom=null;state=null;joinBtn.disabled=false;leaveBtn.disabled=true;msg.textContent='Odadan ayrıldın.';render()});
-canvas.addEventListener('click',e=>{
- if(!socket?.connected||!myId||!state)return;
- const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)*canvas.width/r.width,y=(e.clientY-r.top)*canvas.height/r.height;
- const c=Math.floor(x/CW),row=Math.floor(y/CH),index=row*COLS+c;selected=index;socket.emit('attack',{index});render();
-});
-document.getElementById('expandBtn').addEventListener('click',()=>socket?.emit('expand'));
-document.getElementById('defendBtn').addEventListener('click',()=>socket?.emit('defend'));
-draw();
-})();
+
+function renderPlayers(players){
+  const ready=players.filter(p=>p.ready).length;
+  const total=players.length;
+  const pct=total ? Math.round(ready/total*100):0;
+  $('percent').textContent='%'+pct;
+  $('bar').style.width=pct+'%';
+  $('readyCount').textContent=`${ready}/${total} oyuncu hazır`;
+  $('players').innerHTML=players.length?players.map(p=>`
+    <div class="player">
+      <span class="dot ${p.ready?'ready':''}"></span>
+      <span class="playername">${escapeHTML(p.name||'Oyuncu')}</span>
+      <span class="status">${p.ready?'Hazır':'Bekliyor'}</span>
+    </div>`).join(''):'<p class="muted">Henüz oyuncu yok.</p>';
+  $('ready').textContent=isReady?'✓ HAZIR DEĞİLİM':'✓ HAZIRIM';
+  $('ready').classList.toggle('on',isReady);
+}
+
+function escapeHTML(s){
+  return String(s).replace(/[&<>"']/g,c=>({
+    '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
+  })[c]);
+}
+function addMessage(name,message){
+  const div=document.createElement('div');
+  div.style.marginBottom='8px';
+  const strong=document.createElement('strong');
+  strong.textContent=(name||'Oyuncu')+': ';
+  div.appendChild(strong);
+  div.appendChild(document.createTextNode(message||''));
+  $('messages').appendChild(div);
+  $('messages').scrollTop=$('messages').scrollHeight;
+}
+
+$('play').onclick=()=>{
+  show('lobby');
+  inLobby=true;
+  if(socket?.connected){
+    socket.emit('joinLobby');
+  }else{
+    $('lobbyStatus').textContent='Sunucu bağlantısı bekleniyor. Multiplayer için sunucu ayarı gerekiyor.';
+  }
+};
+$('back').onclick=()=>{
+  inLobby=false;
+  show('home');
+};
+$('ready').onclick=()=>{
+  if(!socket?.connected){
+    $('lobbyStatus').textContent='Henüz sunucuya bağlı değilsin. Önce server.js ayarlanmalı.';
+    return;
+  }
+  socket.emit('setReady',!isReady);
+};
+$('toggleChat').onclick=()=>{
+  chatOpen=!chatOpen;
+  $('chatContent').style.display=chatOpen?'block':'none';
+  $('toggleChat').textContent=chatOpen?'Sohbeti kapat':'Sohbeti aç';
+};
+$('chatForm').onsubmit=e=>{
+  e.preventDefault();
+  const message=$('chatInput').value.trim();
+  if(!message)return;
+  if(!socket?.connected){
+    $('lobbyStatus').textContent='Mesaj göndermek için sunucu bağlantısı gerekli.';
+    return;
+  }
+  socket.emit('chatMessage',message);
+  $('chatInput').value='';
+};
+$('leaveGame').onclick=()=>show('lobby');
+
+connect();
 </script>
-</body></html>
+</body>
+</html>
