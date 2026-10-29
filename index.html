@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Territory Clash.io</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#0b1220;color:#e8eefc;font:15px system-ui,Arial}
+header{display:flex;gap:12px;align-items:center;justify-content:space-between;padding:12px 16px;background:#111c30;border-bottom:1px solid #263652;flex-wrap:wrap}
+h1{font-size:20px;margin:0}small{color:#a8b8d4}.layout{display:grid;grid-template-columns:minmax(0,1fr) 260px;gap:12px;padding:12px;max-width:1400px;margin:auto}
+canvas{width:100%;height:auto;display:block;background:#101b2c;border:1px solid #2b3c59;border-radius:12px;touch-action:manipulation}
+.panel{background:#111c30;border:1px solid #263652;border-radius:12px;padding:14px;margin-bottom:12px}
+label{display:block;color:#b9c7df;margin:10px 0 5px}input,button{font:inherit;border-radius:8px;border:1px solid #334866;padding:10px;background:#0b1527;color:#eef4ff;width:100%}button{background:#3b82f6;border:0;font-weight:700;cursor:pointer;margin-top:8px}button.secondary{background:#253650}button:disabled{opacity:.5;cursor:not-allowed}.status{padding:8px 10px;border-radius:8px;background:#0b1527;color:#bcd0ef;line-height:1.5}.players{display:grid;gap:7px;margin-top:8px}.player{display:flex;justify-content:space-between;gap:8px}.dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px}.hint{line-height:1.5;color:#b7c5dc;font-size:13px}.mobile-controls{display:none;grid-template-columns:1fr 1fr;gap:8px}
+@media(max-width:850px){.layout{grid-template-columns:1fr}.side{display:grid;grid-template-columns:1fr 1fr;gap:10px}.side .panel{margin:0}.mobile-controls{display:grid}}
+</style>
+</head>
+<body>
+<header><div><h1>🌍 Territory Clash.io</h1><small>Gerçek zamanlı bölge savaşı</small></div><div id="connection" class="status">Sunucuya bağlanılıyor…</div></header>
+<main class="layout">
+<section>
+<canvas id="map" width="900" height="600" aria-label="Oyun haritası"></canvas>
+<div class="mobile-controls"><button id="expandBtn">Büyüme hamlesi</button><button class="secondary" id="defendBtn">Savunmayı güçlendir</button></div>
+<p class="hint">Haritada kendi rengindeki veya nötr bölgelere tıkla. Komşu bölgeler üzerinden yayıl. İlk sürüm prototiptir.</p>
+</section>
+<aside class="side">
+<div class="panel"><h3>Oyuncu bilgileri</h3><div id="me" class="status">Bir takma ad yazıp odaya katıl.</div>
+<label for="name">Takma ad</label><input id="name" maxlength="18" value="Oyuncu">
+<label for="room">Oda kodu</label><input id="room" maxlength="12" value="ARENA1">
+<button id="join">Odaya katıl</button><button id="leave" class="secondary" disabled>Odadan ayrıl</button></div>
+<div class="panel"><h3>Skor tablosu</h3><div id="players" class="players">Henüz oyuncu yok.</div></div>
+<div class="panel"><h3>Nasıl oynanır?</h3><p class="hint">• Oda kodunu arkadaşına ver.<br>• İkiniz de aynı kodla katılın.<br>• Bölgeler sunucu tarafından güncellenir.<br>• En çok bölgeyi ele geçiren kazanır.</p><div id="message" class="status">Hazır.</div></div>
+</aside></main>
+<script src="/socket.io/socket.io.js"></script>
+<script>
+(() => {
+const canvas=document.getElementById('map'),ctx=canvas.getContext('2d');
+const conn=document.getElementById('connection'),meBox=document.getElementById('me'),playersBox=document.getElementById('players'),msg=document.getElementById('message');
+const nameInput=document.getElementById('name'),roomInput=document.getElementById('room'),joinBtn=document.getElementById('join'),leaveBtn=document.getElementById('leave');
+let socket=null, state=null, myId=null, currentRoom=null, selected=null;
+const COLS=18,ROWS=12,CW=canvas.width/COLS,CH=canvas.height/ROWS;
+function draw(){
+ ctx.clearRect(0,0,canvas.width,canvas.height);
+ if(!state){ctx.fillStyle='#b9c8df';ctx.font='24px system-ui';ctx.textAlign='center';ctx.fillText('Odaya katılınca harita açılacak',canvas.width/2,canvas.height/2);return}
+ for(let i=0;i<state.cells.length;i++){
+  const cell=state.cells[i],x=(i%COLS)*CW,y=Math.floor(i/COLS)*CH;
+  ctx.fillStyle=cell.owner? (state.players.find(p=>p.id===cell.owner)?.color||'#667085') : '#26364b';
+  ctx.fillRect(x+1,y+1,CW-2,CH-2);
+  if(cell.owner){ctx.fillStyle='rgba(255,255,255,.8)';ctx.font='12px system-ui';ctx.textAlign='center';ctx.fillText(String(cell.army||1),x+CW/2,y+CH/2+4)}
+  if(selected===i){ctx.strokeStyle='#fff';ctx.lineWidth=3;ctx.strokeRect(x+3,y+3,CW-6,CH-6)}
+ }
+}
+function render(){
+ draw();
+ if(!state)return;
+ const p=state.players.find(x=>x.id===myId);
+ meBox.textContent=p?`${p.name} · ${p.cells} bölge · ${p.army} asker`:'Odaya katıl.';
+ playersBox.innerHTML='';
+ [...state.players].sort((a,b)=>b.cells-a.cells).forEach((p,i)=>{
+  const row=document.createElement('div');row.className='player';
+  const left=document.createElement('span');left.textContent=`${i+1}. ${p.name}`;
+  const dot=document.createElement('span');dot.className='dot';dot.style.background=p.color;left.prepend(dot);
+  const score=document.createElement('b');score.textContent=p.cells;
+  row.append(left,score);playersBox.append(row);
+ });
+}
+function connect(){
+ if(typeof io==='undefined'){conn.textContent='Sunucu henüz kurulmadı';msg.textContent='Bu proje dosyalarını bir Node.js sunucusuna dağıtınca çevrim içi bağlantı çalışır.';draw();return}
+ socket=io();
+ socket.on('connect',()=>{conn.textContent='🟢 Sunucuya bağlı';});
+ socket.on('disconnect',()=>{conn.textContent='🔴 Bağlantı kesildi';});
+ socket.on('state',s=>{state=s;render()});
+ socket.on('joined',d=>{myId=d.id;currentRoom=d.room;joinBtn.disabled=true;leaveBtn.disabled=false;msg.textContent=`${d.room} odasına katıldın!`});
+ socket.on('notice',t=>msg.textContent=t);
+ socket.on('connect_error',()=>{conn.textContent='Sunucuya bağlanılamadı';});
+}
+joinBtn.addEventListener('click',()=>{
+ if(!socket){connect();setTimeout(()=>{if(socket?.connected)joinRoom()},250);return}
+ if(socket.connected)joinRoom();else socket.once('connect',joinRoom);
+});
+function joinRoom(){socket.emit('join',{name:nameInput.value.trim()||'Oyuncu',room:roomInput.value.trim().toUpperCase()||'ARENA1'});}
+leaveBtn.addEventListener('click',()=>{socket?.emit('leave');myId=null;currentRoom=null;state=null;joinBtn.disabled=false;leaveBtn.disabled=true;msg.textContent='Odadan ayrıldın.';render()});
+canvas.addEventListener('click',e=>{
+ if(!socket?.connected||!myId||!state)return;
+ const r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)*canvas.width/r.width,y=(e.clientY-r.top)*canvas.height/r.height;
+ const c=Math.floor(x/CW),row=Math.floor(y/CH),index=row*COLS+c;selected=index;socket.emit('attack',{index});render();
+});
+document.getElementById('expandBtn').addEventListener('click',()=>socket?.emit('expand'));
+document.getElementById('defendBtn').addEventListener('click',()=>socket?.emit('defend'));
+draw();
+})();
+</script>
+</body></html>
